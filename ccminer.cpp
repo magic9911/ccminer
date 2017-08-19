@@ -3837,7 +3837,7 @@ int main(int argc, char *argv[])
 	// get opt_quiet early
 	parse_single_opt('q', argc, argv);
 
-	printf("*** ccminer " PACKAGE_VERSION " for nVidia GPUs by tpruvot@github ***\n");
+	printf("*** ccminer-x " PACKAGE_VERSION " for nVidia GPUs Edit By Project X ***\n");
 	if (!opt_quiet) {
 		const char* arch = is_x64() ? "64-bits" : "32-bits";
 #ifdef _MSC_VER
@@ -3846,9 +3846,7 @@ int main(int argc, char *argv[])
 		printf("    Built with the nVidia CUDA Toolkit %d.%d %s\n\n",
 #endif
 			CUDART_VERSION/1000, (CUDART_VERSION % 1000)/10, arch);
-		printf("  Originally based on Christian Buchner and Christian H. project\n");
-		printf("  Include some algos from alexis78, djm34, sp, tsiv and klausT.\n\n");
-		printf("BTC donation address: 1AJdfCpLWPNoAMDfHF1wD5y8VgKSSTHxPo (tpruvot)\n\n");
+		printf("BTC donation address: 1K34uqFfRfbESLwfXk4cZxCTtSkoF1YrRu \n\n");
 	}
 
 	rpc_user = strdup("");
