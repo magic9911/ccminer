@@ -1,0 +1,63 @@
+From 3d909bc2c7b1c9d129073ac832d8b5dd8b6c880f Mon Sep 17 00:00:00 2001
+From: DeckerSU <support@decker.su>
+Date: Mon, 14 Aug 2017 05:14:59 +0400
+Subject: [PATCH] make sources vs2015 compatible
+
+---
+ Algo256/cuda_blake256.cu                             |   4 ++--
+ ccminer.vcxproj                                      |  10 +++++-----
+ .../out/x64/Release/lib/libcurl_a.lib                | Bin 0 -> 2169416 bytes
+ .../out/x64/Release/lib/libeay32MT.lib               | Bin 0 -> 13268380 bytes
+ .../out/x86/Release/lib/libcurl_a.lib                | Bin 0 -> 1831190 bytes
+ .../out/x86/Release/lib/libeay32MT.lib               | Bin 0 -> 12433036 bytes
+ neoscrypt/cuda_neoscrypt.cu                          |   4 ++--
+ 7 files changed, 9 insertions(+), 9 deletions(-)
+ create mode 100644 compat/curl-for-windows/out/x64/Release/lib/libcurl_a.lib
+ create mode 100644 compat/curl-for-windows/out/x64/Release/lib/libeay32MT.lib
+ create mode 100644 compat/curl-for-windows/out/x86/Release/lib/libcurl_a.lib
+ create mode 100644 compat/curl-for-windows/out/x86/Release/lib/libeay32MT.lib
+
+diff --git a/ccminer.vcxproj b/ccminer.vcxproj
+index a5769f4..cb904c4 100644
+--- a/ccminer.vcxproj
++++ b/ccminer.vcxproj
+@@ -1,5 +1,5 @@
+ ﻿<?xml version="1.0" encoding="utf-8"?>
+-<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
++<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+   <ItemGroup Label="ProjectConfigurations">
+     <ProjectConfiguration Include="Release|Win32">
+       <Configuration>Release</Configuration>
+@@ -26,7 +26,7 @@
+   <PropertyGroup Label="Configuration">
+     <ConfigurationType>Application</ConfigurationType>
+     <CharacterSet>MultiByte</CharacterSet>
+-    <PlatformToolset>v120</PlatformToolset>
++    <PlatformToolset>v140</PlatformToolset>
+     <CLRSupport>false</CLRSupport>
+     <LinkIncremental>false</LinkIncremental>
+   </PropertyGroup>
+@@ -142,7 +142,7 @@
+       <EnableCOMDATFolding>true</EnableCOMDATFolding>
+       <OptimizeReferences>true</OptimizeReferences>
+       <SubSystem>Console</SubSystem>
+-      <AdditionalDependencies>cudart_static.lib;cuda.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;pthreadVC2.lib;libcurl.x86.lib;openssl.x86.lib;zlib.x86.lib;ws2_32.lib;Wldap32.lib;nvapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
++      <AdditionalDependencies>cudart_static.lib;cuda.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;pthreadVC2.lib;libcurl_a.lib;libeay32MT.lib;zlib.x86.lib;ws2_32.lib;Wldap32.lib;nvapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+       <IgnoreSpecificDefaultLibraries>libcmt.lib</IgnoreSpecificDefaultLibraries>
+       <AdditionalLibraryDirectories>compat\pthreads\x86;compat\curl-for-windows\out\x86\Release\lib;compat\nvapi\x86;%(AdditionalLibraryDirectories);$(CudaToolkitLibDir)</AdditionalLibraryDirectories>
+       <AdditionalOptions>/NODEFAULTLIB:LIBCMT %(AdditionalOptions)</AdditionalOptions>
+@@ -186,7 +186,7 @@
+       <EnableCOMDATFolding>true</EnableCOMDATFolding>
+       <OptimizeReferences>true</OptimizeReferences>
+       <SubSystem>Console</SubSystem>
+-      <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;pthreadVC2.lib;libcurl.x64.lib;openssl.x64.lib;zlib.x64.lib;ws2_32.lib;Wldap32.lib;cudart_static.lib;cuda.lib;nvapi64.lib;%(AdditionalDependencies)</AdditionalDependencies>
++      <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;pthreadVC2.lib;libcurl_a.lib;libeay32MT.lib;zlib.x64.lib;ws2_32.lib;Wldap32.lib;cudart_static.lib;cuda.lib;nvapi64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+       <IgnoreSpecificDefaultLibraries>libcmt.lib</IgnoreSpecificDefaultLibraries>
+       <AdditionalLibraryDirectories>compat\pthreads\x64;compat\curl-for-windows\out\x64\Release\lib;compat\nvapi\amd64;%(AdditionalLibraryDirectories);$(CudaToolkitLibDir)</AdditionalLibraryDirectories>
+       <AdditionalOptions>/NODEFAULTLIB:LIBCMT %(AdditionalOptions)</AdditionalOptions>
+@@ -604,4 +604,4 @@
+   <Target Name="AfterClean">
+     <Delete Files="@(FilesToCopy->'$(OutDir)%(Filename)%(Extension)')" TreatErrorsAsWarnings="true" />
+   </Target>
+-</Project>
++</Project>
