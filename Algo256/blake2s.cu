@@ -440,7 +440,7 @@ extern "C" int scanhash_blake2s(int thr_id, struct work *work, uint32_t max_nonc
 
 	const int dev_id = device_map[thr_id];
 	int rc = 0;
-	int intensity = is_windows() ? 25 : 28;
+	int intensity = 28;
 	uint32_t throughput = cuda_default_throughput(thr_id, 1U << intensity);
 	if (init[thr_id]) throughput = min(throughput, max_nonce - first_nonce);
 
@@ -457,8 +457,6 @@ extern "C" int scanhash_blake2s(int thr_id, struct work *work, uint32_t max_nonc
 			CUDA_LOG_ERROR();
 		}
 		gpulog(LOG_INFO, thr_id, "Intensity set to %g, %u cuda threads", throughput2intensity(throughput), throughput);
-
-		cuda_get_arch(thr_id);
 
 		CUDA_CALL_OR_RET_X(cudaMalloc(&d_resNonce[thr_id], maxResults * sizeof(uint32_t)), -1);
 		CUDA_CALL_OR_RET_X(cudaMallocHost(&h_resNonce[thr_id], maxResults * sizeof(uint32_t)), -1);
@@ -532,9 +530,7 @@ extern "C" int scanhash_blake2s(int thr_id, struct work *work, uint32_t max_nonc
 				pdata[19] = max(work->nonces[0], work->nonces[1]); // next scan start
 				return rc;
 			} else if (vhashcpu[7] > ptarget[7]) {
-				gpu_increment_reject(thr_id);
-				if (!opt_quiet)
-					gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", resNonces[0]);
+				gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", resNonces[0]);
 			}
 		}
 

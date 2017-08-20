@@ -47,10 +47,10 @@ extern void x15_whirlpool_cpu_hash_64(int thr_id, uint32_t threads, uint32_t sta
 extern void x15_whirlpool_cpu_free(int thr_id);
 
 extern void x17_sha512_cpu_init(int thr_id, uint32_t threads);
-extern void x17_sha512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t startNounce, uint32_t *d_hash);
+extern void x17_sha512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t startNounce, uint32_t *d_nonceVector, uint32_t *d_hash, int order);
 
 extern void x17_haval256_cpu_init(int thr_id, uint32_t threads);
-extern void x17_haval256_cpu_hash_64(int thr_id, uint32_t threads, uint32_t startNounce, uint32_t *d_hash, const int outlen);
+extern void x17_haval256_cpu_hash_64(int thr_id, uint32_t threads, uint32_t startNounce, uint32_t *d_nonceVector, uint32_t *d_hash, int order);
 
 
 // X17 CPU Hash (Validation)
@@ -225,44 +225,39 @@ extern "C" int scanhash_x17(int thr_id, struct work* work, uint32_t max_nonce, u
 		x13_fugue512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
 		x14_shabal512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
 		x15_whirlpool_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
-		x17_sha512_cpu_hash_64(thr_id, throughput, pdata[19], d_hash[thr_id]); order++;
-		x17_haval256_cpu_hash_64(thr_id, throughput, pdata[19], d_hash[thr_id], 256); order++;
+		x17_sha512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+		x17_haval256_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
 
 		*hashes_done = pdata[19] - first_nonce + throughput;
 
-		work->nonces[0] = cuda_check_hash(thr_id, throughput, pdata[19], d_hash[thr_id]);
-		if (work->nonces[0] != UINT32_MAX)
+		uint32_t foundNonce = cuda_check_hash(thr_id, throughput, pdata[19], d_hash[thr_id]);
+		if (foundNonce != UINT32_MAX)
 		{
 			const uint32_t Htarg = ptarget[7];
-			uint32_t _ALIGN(64) vhash[8];
-			be32enc(&endiandata[19], work->nonces[0]);
-			x17hash(vhash, endiandata);
+			uint32_t _ALIGN(64) vhash64[8];
+			be32enc(&endiandata[19], foundNonce);
+			x17hash(vhash64, endiandata);
 
-			if (vhash[7] <= Htarg && fulltest(vhash, ptarget)) {
-				work->valid_nonces = 1;
-				work->nonces[1] = cuda_check_hash_suppl(thr_id, throughput, pdata[19], d_hash[thr_id], 1);
-				work_set_target_ratio(work, vhash);
-				if (work->nonces[1] != 0) {
-					be32enc(&endiandata[19], work->nonces[1]);
-					x17hash(vhash, endiandata);
-					bn_set_target_ratio(work, vhash, 1);
-					work->valid_nonces++;
-					pdata[19] = max(work->nonces[0], work->nonces[1]) + 1;
-				} else {
-					pdata[19] = work->nonces[0] + 1; // cursor
+			if (vhash64[7] <= Htarg && fulltest(vhash64, ptarget)) {
+				int res = 1;
+				uint32_t secNonce = cuda_check_hash_suppl(thr_id, throughput, pdata[19], d_hash[thr_id], 1);
+				work_set_target_ratio(work, vhash64);
+				if (secNonce != 0) {
+					be32enc(&endiandata[19], secNonce);
+					x17hash(vhash64, endiandata);
+					if (bn_hash_target_ratio(vhash64, ptarget) > work->shareratio[0])
+						work_set_target_ratio(work, vhash64);
+					pdata[21] = secNonce;
+					res++;
 				}
-				return work->valid_nonces;
-			}
-			else if (vhash[7] > Htarg) {
+				pdata[19] = foundNonce;
+				return res;
+			} else {
 				// x11+ coins could do some random error, but not on retry
-				gpu_increment_reject(thr_id);
 				if (!warn) {
-					warn++;
-					pdata[19] = work->nonces[0] + 1;
-					continue;
+					warn++; continue;
 				} else {
-					if (!opt_quiet)
-					gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", work->nonces[0]);
+					gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", foundNonce);
 					warn = 0;
 				}
 			}

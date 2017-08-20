@@ -27,21 +27,25 @@ extern "C" {
 // CUDA Devices on the System
 int cuda_num_devices()
 {
-	int version = 0, GPU_N = 0;
+	int version;
 	cudaError_t err = cudaDriverGetVersion(&version);
-	if (err != cudaSuccess) {
+	if (err != cudaSuccess)
+	{
 		applog(LOG_ERR, "Unable to query CUDA driver version! Is an nVidia driver installed?");
 		exit(1);
 	}
 
-	if (version < CUDART_VERSION) {
-		applog(LOG_ERR, "Your system does not support CUDA %d.%d API!",
-			CUDART_VERSION / 1000, (CUDART_VERSION % 1000) / 10);
+	int maj = version / 1000, min = version % 100; // same as in deviceQuery sample
+	if (maj < 5 || (maj == 5 && min < 5))
+	{
+		applog(LOG_ERR, "Driver does not support CUDA %d.%d API! Update your nVidia driver!", 5, 5);
 		exit(1);
 	}
 
+	int GPU_N;
 	err = cudaGetDeviceCount(&GPU_N);
-	if (err != cudaSuccess) {
+	if (err != cudaSuccess)
+	{
 		applog(LOG_ERR, "Unable to query number of CUDA devices! Is an nVidia driver installed?");
 		exit(1);
 	}
@@ -74,7 +78,6 @@ void cuda_devicenames()
 		cudaGetDeviceProperties(&props, dev_id);
 
 		device_sm[dev_id] = (props.major * 100 + props.minor * 10);
-		device_mpcount[dev_id] = (short) props.multiProcessorCount;
 
 		if (device_name[dev_id]) {
 			free(device_name[dev_id]);
@@ -102,10 +105,8 @@ void cuda_print_devices()
 		cudaDeviceProp props;
 		cudaGetDeviceProperties(&props, dev_id);
 		if (!opt_n_threads || n < opt_n_threads) {
-			fprintf(stderr, "GPU #%d: SM %d.%d %s @ %.0f MHz (MEM %.0f)\n", dev_id,
-				props.major, props.minor, device_name[dev_id],
-				(double) props.clockRate/1000,
-				(double) props.memoryClockRate/1000);
+			fprintf(stderr, "GPU #%d: SM %d.%d %s @ %.0f MHz (MEM %.0f)\n", dev_id, props.major, props.minor,
+				device_name[dev_id], (double) props.clockRate/1000, (double) props.memoryClockRate/1000);
 #ifdef USE_WRAPNVML
 			if (opt_debug) nvml_print_device_info(dev_id);
 #ifdef WIN32
@@ -122,8 +123,8 @@ void cuda_print_devices()
 void cuda_shutdown()
 {
 	// require gpu init first
-	//if (thr_info != NULL)
-	//	cudaDeviceSynchronize();
+	if (thr_info != NULL)
+		cudaDeviceSynchronize();
 	cudaDeviceReset();
 }
 
@@ -223,7 +224,7 @@ int cuda_available_memory(int thr_id)
 	uint64_t tot64 = 0, free64 = 0;
 	// cuda (6.5) one can crash on pascal and dont handle 8GB
 	nvapiMemGetInfo(dev_id, &free64, &tot64);
-	return (int) (free64 / (1024));
+	return (int) (free64 / (1024 * 1024));
 #else
 	size_t mtotal = 0, mfree = 0;
 	cudaSetDevice(dev_id);

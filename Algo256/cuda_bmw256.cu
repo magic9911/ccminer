@@ -230,8 +230,8 @@ void bmw256_gpu_hash_32(uint32_t threads, uint32_t startNounce, uint64_t *g_hash
 		LOHI(message[0], message[1], __ldg(&g_hash[thread]));
 		LOHI(message[2], message[3], __ldg(&g_hash[thread + 1 * threads]));
 		LOHI(message[4], message[5], __ldg(&g_hash[thread + 2 * threads]));
-		LOHI(message[6], message[7], __ldg(&g_hash[thread + 3 * threads]));
 
+		LOHI(message[6], message[7], __ldg(&g_hash[thread + 3 * threads]));
 		message[8]=0x80;
 		message[14]=0x100;
 		Compression256(message);

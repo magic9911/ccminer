@@ -92,7 +92,7 @@ static uint32_t *h_resNonce[MAX_GPUS];
 	v[ c]+= v[ d];                          v[c1]+= v[d1]; \
 	v[ b] = ROTR32(v[ b] ^ v[ c], 7);       v[b1] = ROTR32(v[b1] ^ v[c1], 7); \
 }
-
+ 
 #define pxorx1GS2(a,b,c,d, a1,b1,c1,d1) { \
 	v[ a]+= c_xors[i++] + v[ b];            v[a1]+= (c_xors[i++]^nonce) + v[b1]; \
 	v[ d] = ROL16(v[ d] ^ v[ a]);           v[d1] = ROL16(v[d1] ^ v[a1]); \
@@ -374,8 +374,6 @@ extern "C" int scanhash_decred(int thr_id, struct work* work, uint32_t max_nonce
 		}
 		gpulog(LOG_INFO, thr_id, "Intensity set to %g, %u cuda threads", throughput2intensity(throughput), throughput);
 
-		cuda_get_arch(thr_id);
-
 		CUDA_CALL_OR_RET_X(cudaMalloc(&d_resNonce[thr_id], MAX_RESULTS*sizeof(uint32_t)), -1);
 		CUDA_CALL_OR_RET_X(cudaMallocHost(&h_resNonce[thr_id], MAX_RESULTS*sizeof(uint32_t)), -1);
 		init[thr_id] = true;
@@ -393,8 +391,6 @@ extern "C" int scanhash_decred(int thr_id, struct work* work, uint32_t max_nonce
 		// GPU HASH
 		decred_gpu_hash_nonce <<<grid, block>>> (throughput, (*pnonce), d_resNonce[thr_id], targetHigh);
 
-		*hashes_done = (*pnonce) - first_nonce + throughput;
-
 		// first cell contains the valid nonces count
 		cudaMemcpy(resNonces, d_resNonce[thr_id], sizeof(uint32_t), cudaMemcpyDeviceToHost);
 
@@ -408,8 +404,9 @@ extern "C" int scanhash_decred(int thr_id, struct work* work, uint32_t max_nonce
 			decred_hash(vhash, endiandata);
 			if (vhash[6] <= ptarget[6] && fulltest(vhash, ptarget))
 			{
-				work->valid_nonces = 1;
+				int rc = work->valid_nonces = 1;
 				work_set_target_ratio(work, vhash);
+				*hashes_done = (*pnonce) - first_nonce + throughput;
 				work->nonces[0] = swab32(resNonces[1]);
 				*pnonce = work->nonces[0];
 
@@ -420,6 +417,7 @@ extern "C" int scanhash_decred(int thr_id, struct work* work, uint32_t max_nonce
 					decred_hash(vhash, endiandata);
 					if (vhash[6] <= ptarget[6] && fulltest(vhash, ptarget)) {
 						work->nonces[1] = swab32(resNonces[n]);
+
 						if (bn_hash_target_ratio(vhash, ptarget) > work->shareratio[0]) {
 							// we really want the best first ? depends...
 							work->shareratio[1] = work->shareratio[0];
@@ -431,23 +429,19 @@ extern "C" int scanhash_decred(int thr_id, struct work* work, uint32_t max_nonce
 							bn_set_target_ratio(work, vhash, 1);
 							work->valid_nonces++;
 						}
-						work->valid_nonces = 2; // MAX_NONCES submit limited to 2
+						rc = 2; // MAX_NONCES submit limited to 2
 
 						gpulog(LOG_DEBUG, thr_id, "multiple nonces 1:%08x (%g) %u:%08x (%g)",
 							work->nonces[0], work->sharediff[0], n, work->nonces[1], work->sharediff[1]);
 
 					} else if (vhash[6] > ptarget[6]) {
-						gpu_increment_reject(thr_id);
-						if (!opt_quiet)
 						gpulog(LOG_WARNING, thr_id, "result %u for %08x does not validate on CPU!", n, resNonces[n]);
 					}
 				}
-				return work->valid_nonces;
+				return rc;
 
 			} else if (vhash[6] > ptarget[6]) {
-				gpu_increment_reject(thr_id);
-				if (!opt_quiet)
-					gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", resNonces[1]);
+				gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", resNonces[1]);
 			}
 		}
 		*pnonce += throughput;

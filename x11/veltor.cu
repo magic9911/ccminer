@@ -120,35 +120,31 @@ extern "C" int scanhash_veltor(int thr_id, struct work* work, uint32_t max_nonce
 			veltorhash(vhash, endiandata);
 			if (vhash[7] <= Htarg && fulltest(vhash, ptarget))
 			{
-				work->nonces[0] = startNounce + h_resNonce[0];
-				work->valid_nonces = 1;
+				int res = 1;
 				work_set_target_ratio(work, vhash);
+				work->nonces[0] = startNounce + h_resNonce[0];
 				if (h_resNonce[1] != UINT32_MAX)
 				{
 					uint32_t secNonce = work->nonces[1] = startNounce + h_resNonce[1];
+					gpulog(LOG_DEBUG, thr_id, "Found 2nd nonce: %08x", secNonce);
 					be32enc(&endiandata[19], secNonce);
 					veltorhash(vhash, endiandata);
 					work->nonces[1] = secNonce;
+
 					if (bn_hash_target_ratio(vhash, ptarget) > work->shareratio[0]) {
 						work_set_target_ratio(work, vhash);
 						xchg(work->nonces[1], work->nonces[0]);
 					} else {
-						bn_set_target_ratio(work, vhash, work->valid_nonces);
+						bn_set_target_ratio(work, vhash, res);
 					}
-					work->valid_nonces++;
-					pdata[19] = max(work->nonces[0], work->nonces[1]) + 1;
-				} else {
-					pdata[19] = work->nonces[0] + 1; // cursor
+					res++;
 				}
-				return work->valid_nonces;
+				pdata[19] = max(work->nonces[0], work->nonces[1]) + 1; // next scan
+				return res;
 			}
-			else if (vhash[7] > Htarg) {
-				gpu_increment_reject(thr_id);
-				if (!opt_quiet)
-					gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", h_resNonce[0]);
+			else if (vhash[7] > Htarg && !opt_quiet) {
+				gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", h_resNonce[0]);
 				cudaMemset(d_resNonce[thr_id], 0xff, NBN*sizeof(uint32_t));
-				pdata[19] = startNounce + h_resNonce[0] + 1;
-				continue;
 			}
 		}
 		if ((uint64_t) throughput + pdata[19] >= max_nonce) {
@@ -174,8 +170,8 @@ extern "C" void free_veltor(int thr_id)
 	cudaThreadSynchronize();
 
 	cudaFree(d_hash[thr_id]);
-	cudaFree(d_resNonce[thr_id]);
 
+	cuda_check_cpu_free(thr_id);
 	init[thr_id] = false;
 
 	cudaDeviceSynchronize();

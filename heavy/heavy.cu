@@ -296,9 +296,7 @@ int scanhash_heavy(int thr_id, struct work *work, uint32_t max_nonce, unsigned l
 					pdata[19] += nonce - pdata[19];
 					heavycoin_hash((uchar*)vhash, (uchar*)pdata, blocklen);
 					if (memcmp(vhash, foundhash, 32)) {
-						gpu_increment_reject(thr_id);
-						if (!opt_quiet)
-							gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", nonce);
+						gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", nonce);
 					} else {
 						work_set_target_ratio(work, vhash);
 						rc = 1;

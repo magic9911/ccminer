@@ -394,8 +394,6 @@ extern "C" int scanhash_vanilla(int thr_id, struct work* work, uint32_t max_nonc
 		}
 		gpulog(LOG_INFO, thr_id, "Intensity set to %g, %u cuda threads", throughput2intensity(throughput), throughput);
 
-		cuda_get_arch(thr_id);
-
 		CUDA_CALL_OR_RET_X(cudaMalloc(&d_resNonce[thr_id], NBN * sizeof(uint32_t)), -1);
 		CUDA_CALL_OR_RET_X(cudaMallocHost(&h_resNonce[thr_id], NBN * sizeof(uint32_t)), -1);
 		cudaStreamCreate(&streams[thr_id]);
@@ -418,7 +416,6 @@ extern "C" int scanhash_vanilla(int thr_id, struct work* work, uint32_t max_nonc
 	do {
 		vanilla_gpu_hash_16_8<<<grid,block, 0, streams[thr_id]>>>(throughput, pdata[19], d_resNonce[thr_id], targetHigh);
 		cudaMemcpyAsync(h_resNonce[thr_id], d_resNonce[thr_id], NBN*sizeof(uint32_t), cudaMemcpyDeviceToHost,streams[thr_id]);
-		*hashes_done = pdata[19] - first_nonce + throughput;
 		cudaStreamSynchronize(streams[thr_id]);
 
 		if (h_resNonce[thr_id][0] != UINT32_MAX){
@@ -432,43 +429,31 @@ extern "C" int scanhash_vanilla(int thr_id, struct work* work, uint32_t max_nonc
 			vanillahash(vhashcpu, endiandata, blakerounds);
 
 			if (vhashcpu[6] <= Htarg && fulltest(vhashcpu, ptarget)) {
-				work->valid_nonces = 1;
-				work->nonces[0] = h_resNonce[thr_id][0];
+				rc = 1;
 				work_set_target_ratio(work, vhashcpu);
+				*hashes_done = pdata[19] - first_nonce + throughput;
+				pdata[19] = h_resNonce[thr_id][0];
 #if NBN > 1
 				if (h_resNonce[thr_id][1] != UINT32_MAX) {
-					work->nonces[1] = h_resNonce[thr_id][1];
 					be32enc(&endiandata[19], h_resNonce[thr_id][1]);
 					vanillahash(vhashcpu, endiandata, blakerounds);
+					pdata[21] = h_resNonce[thr_id][1];
 					if (bn_hash_target_ratio(vhashcpu, ptarget) > work->shareratio[0]) {
 						work_set_target_ratio(work, vhashcpu);
-						xchg(work->nonces[0], work->nonces[1]);
+						xchg(pdata[19], pdata[21]);
 					}
-					work->valid_nonces = 2;
-					pdata[19] = max(work->nonces[0], work->nonces[1]) + 1;
-				} else {
-					pdata[19] = work->nonces[0] + 1; // cursor
+					rc = 2;
 				}
 #endif
-				return work->valid_nonces;
+				return rc;
 			}
-			else if (vhashcpu[6] > Htarg) {
-				gpu_increment_reject(thr_id);
-				if (!opt_quiet)
-					gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", h_resNonce[thr_id][0]);
-				pdata[19] = work->nonces[0] + 1;
-				continue;
+			else {
+				gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", h_resNonce[thr_id][0]);
 			}
-		}
-
-		if ((uint64_t) throughput + pdata[19] >= max_nonce) {
-			pdata[19] = max_nonce;
-			break;
 		}
 
 		pdata[19] += throughput;
-
-	} while (!work_restart[thr_id].restart);
+	} while (!work_restart[thr_id].restart && ((uint64_t)max_nonce > ((uint64_t)(pdata[19]) + (uint64_t)throughput)));
 
 	*hashes_done = pdata[19] - first_nonce;
 	MyStreamSynchronize(NULL, 0, dev_id);

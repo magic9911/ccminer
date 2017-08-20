@@ -2,22 +2,16 @@
 
 #ifdef __INTELLISENSE__
 /* just for vstudio code colors */
-//#define __CUDA_ARCH__ 500
-#define __threadfence_block()
-#define __ldg(x) *(x)
-#define atomicMin(p,y) y
 #endif
 
 #include "cuda_helper.h"
 
 #define TPB50 32
-
 __constant__ uint32_t pTarget[8];
-
 static __device__ __forceinline__
 void Gfunc(uint2 & a, uint2 &b, uint2 &c, uint2 &d)
 {
-#if __CUDA_ARCH__ > 500
+#if __CUDA_ARCH__ > 500 
 	a += b; uint2 tmp = d; d.y = a.x ^ tmp.x; d.x = a.y ^ tmp.y;
 	c += d; b ^= c; b = ROR24(b);
 	a += b; d ^= a; d = ROR16(d);
@@ -37,6 +31,8 @@ void Gfunc(uint2 & a, uint2 &b, uint2 &c, uint2 &d)
 #define Ncol 8
 #define memshift 3
 
+
+
 __device__ uint2 *DMatrix;
 
 __device__ __forceinline__ uint2 LD4S(const int index)
@@ -53,7 +49,7 @@ __device__ __forceinline__ void ST4S(const int index, const uint2 data)
 	shared_mem[(index * blockDim.y + threadIdx.y) * blockDim.x + threadIdx.x] = data;
 }
 
-#if __CUDA_ARCH__ == 300
+
 __device__ __forceinline__ uint32_t WarpShuffle(uint32_t a, uint32_t b, uint32_t c)
 {
 	return __shfl(a, b, c);
@@ -70,76 +66,8 @@ __device__ __forceinline__ void WarpShuffle3(uint2 &a1, uint2 &a2, uint2 &a3, ui
 	a2 = WarpShuffle(a2, b2, c);
 	a3 = WarpShuffle(a3, b3, c);
 }
-#else // != 300
 
-__device__ __forceinline__ uint32_t WarpShuffle(uint32_t a, uint32_t b, uint32_t c)
-{
-	extern __shared__ uint2 shared_mem[];
 
-	const uint32_t thread = blockDim.x * threadIdx.y + threadIdx.x;
-	uint32_t *_ptr = (uint32_t*)shared_mem;
-
-	__threadfence_block();
-	uint32_t buf = _ptr[thread];
-
-	_ptr[thread] = a;
-	__threadfence_block();
-	uint32_t result = _ptr[(thread&~(c - 1)) + (b&(c - 1))];
-
-	__threadfence_block();
-	_ptr[thread] = buf;
-
-	__threadfence_block();
-	return result;
-}
-
-__device__ __forceinline__ uint2 WarpShuffle(uint2 a, uint32_t b, uint32_t c)
-{
-	extern __shared__ uint2 shared_mem[];
-
-	const uint32_t thread = blockDim.x * threadIdx.y + threadIdx.x;
-
-	__threadfence_block();
-	uint2 buf = shared_mem[thread];
-
-	shared_mem[thread] = a;
-	__threadfence_block();
-	uint2 result = shared_mem[(thread&~(c - 1)) + (b&(c - 1))];
-
-	__threadfence_block();
-	shared_mem[thread] = buf;
-
-	__threadfence_block();
-	return result;
-}
-
-__device__ __forceinline__ void WarpShuffle3(uint2 &a1, uint2 &a2, uint2 &a3, uint32_t b1, uint32_t b2, uint32_t b3, uint32_t c)
-{
-	extern __shared__ uint2 shared_mem[];
-
-	const uint32_t thread = blockDim.x * threadIdx.y + threadIdx.x;
-
-	__threadfence_block();
-	uint2 buf = shared_mem[thread];
-
-	shared_mem[thread] = a1;
-	__threadfence_block();
-	a1 = shared_mem[(thread&~(c - 1)) + (b1&(c - 1))];
-	__threadfence_block();
-	shared_mem[thread] = a2;
-	__threadfence_block();
-	a2 = shared_mem[(thread&~(c - 1)) + (b2&(c - 1))];
-	__threadfence_block();
-	shared_mem[thread] = a3;
-	__threadfence_block();
-	a3 = shared_mem[(thread&~(c - 1)) + (b3&(c - 1))];
-
-	__threadfence_block();
-	shared_mem[thread] = buf;
-	__threadfence_block();
-}
-
-#endif // != 300
 
 __device__ __forceinline__ void round_lyra(uint2 s[4])
 {
@@ -590,10 +518,13 @@ void reduceDuplexRowV50_8(const int rowInOut, uint2 state[4], const uint32_t thr
 		round_lyra(state);
 	}
 
-	#pragma unroll
+
+#pragma unroll
 	for (int j = 0; j < 3; j++)
 		state[j] ^= last[j];
+
 }
+
 
 static __device__ __forceinline__
 void reduceDuplexRowV50_8_v2(const int rowIn, const int rowOut,const int rowInOut, uint2 state[4], const uint32_t thread, const uint32_t threads)
@@ -604,13 +535,13 @@ void reduceDuplexRowV50_8_v2(const int rowIn, const int rowOut,const int rowInOu
 
 	uint2 state1[3], last[3];
 
-	#pragma unroll
+#pragma unroll
 	for (int j = 0; j < 3; j++) {
 		state1[j] = *(DMatrix + ps1 + j*threads*blockDim.x);
 		last[j] = *(DMatrix + ps2 + j*threads*blockDim.x);
 	}
 
-	#pragma unroll
+#pragma unroll
 	for (int j = 0; j < 3; j++) {
 		state1[j] += last[j];
 		state[j] ^= state1[j];
@@ -739,6 +670,7 @@ void lyra2Z_gpu_hash_32_2_sm5(uint32_t threads, uint32_t startNounce, uint2 *g_h
 			prev = iterator;
 			iterator = (iterator - 1) & 7;
 		}
+
 		for (uint32_t i = 0; i<8; i++) {
 			rowa = WarpShuffle(state[0].x, 0, 4) & 7;
 			reduceDuplexRowV50(prev, rowa, iterator, state, thread, threads);
@@ -779,6 +711,8 @@ void lyra2Z_gpu_hash_32_2_sm5(uint32_t threads, uint32_t startNounce, uint2 *g_h
 		rowa = WarpShuffle(state[0].x, 0, 4) & 7;
 		reduceDuplexRowV50_8_v2(prev,iterator,rowa, state, thread, threads);
 
+
+
 		DMatrix[(0 * threads + thread)*blockDim.x + threadIdx.x] = state[0];
 		DMatrix[(1 * threads + thread)*blockDim.x + threadIdx.x] = state[1];
 		DMatrix[(2 * threads + thread)*blockDim.x + threadIdx.x] = state[2];
@@ -803,11 +737,13 @@ void lyra2Z_gpu_hash_32_3_sm5(uint32_t threads, uint32_t startNounce, uint2 *g_h
 		for (int i = 0; i < 12; i++)
 			round_lyra(state);
 
+
 		uint32_t nonce = startNounce + thread;
 		if (((uint64_t*)state)[3] <= ((uint64_t*)pTarget)[3]) {
 			atomicMin(&resNonces[1], resNonces[0]);
 			atomicMin(&resNonces[0], nonce);
 		}
+
 	}
 }
 

@@ -180,6 +180,7 @@ extern "C" int scanhash_quark(int thr_id, struct work* work, uint32_t max_nonce,
 
 	do {
 		int order = 0;
+		uint32_t foundNonce;
 		uint32_t nrm1=0, nrm2=0, nrm3=0;
 
 		quark_blake512_cpu_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id]); order++;
@@ -228,8 +229,8 @@ extern "C" int scanhash_quark(int thr_id, struct work* work, uint32_t max_nonce,
 			quark_keccak512_cpu_hash_64(thr_id, nrm1, pdata[19], d_branch1Nonces[thr_id], d_hash[thr_id], order++);
 			quark_jh512_cpu_hash_64(thr_id, nrm2, pdata[19], d_branch2Nonces[thr_id], d_hash[thr_id], order++);
 
-			work->nonces[0] = cuda_check_hash_branch(thr_id, nrm3, pdata[19], d_branch3Nonces[thr_id], d_hash[thr_id], order++);
-			work->nonces[1] = 0;
+			foundNonce = cuda_check_hash_branch(thr_id, nrm3, pdata[19], d_branch3Nonces[thr_id], d_hash[thr_id], order++);
+
 		} else {
 			/* algo permutations are made with 2 different buffers */
 
@@ -262,49 +263,31 @@ extern "C" int scanhash_quark(int thr_id, struct work* work, uint32_t max_nonce,
 			TRACE("perm3  :");
 
 			CUDA_LOG_ERROR();
-			work->nonces[0] = cuda_check_hash(thr_id, throughput, pdata[19], d_hash[thr_id]);
-			work->nonces[1] = cuda_check_hash_suppl(thr_id, throughput, pdata[19], d_hash[thr_id], 1);
+			foundNonce = cuda_check_hash(thr_id, throughput, pdata[19], d_hash[thr_id]);
 		}
 
 		*hashes_done = pdata[19] - first_nonce + throughput;
 
-		if (work->nonces[0] != UINT32_MAX)
+		if (foundNonce != UINT32_MAX)
 		{
-			uint32_t _ALIGN(64) vhash[8];
-			be32enc(&endiandata[19], work->nonces[0]);
+			uint32_t vhash[8];
+			be32enc(&endiandata[19], foundNonce);
 			quarkhash(vhash, endiandata);
 
 			if (vhash[7] <= ptarget[7] && fulltest(vhash, ptarget)) {
-				work->valid_nonces = 1;
 				work_set_target_ratio(work, vhash);
-				if (work->nonces[1] != 0) {
-					be32enc(&endiandata[19], work->nonces[1]);
-					quarkhash(vhash, endiandata);
-					bn_set_target_ratio(work, vhash, 1);
-					work->valid_nonces++;
-					pdata[19] = max(work->nonces[0], work->nonces[1]) + 1;
-				} else {
-					pdata[19] = work->nonces[0] + 1; // cursor
-				}
-				return work->valid_nonces;
+				pdata[19] = foundNonce;
+				return 1;
+			} else {
+				gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", foundNonce);
+				applog_hash((uchar*) vhash);
+				applog_hash((uchar*) ptarget);
 			}
-			else if (vhash[7] > ptarget[7]) {
-				gpu_increment_reject(thr_id);
-				if (!opt_quiet)
-				gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", work->nonces[0]);
-				pdata[19] = work->nonces[0] + 1;
-				continue;
-			}
-		}
-
-		if ((uint64_t) throughput + pdata[19] >= max_nonce) {
-			pdata[19] = max_nonce;
-			break;
 		}
 
 		pdata[19] += throughput;
 
-	} while (!work_restart[thr_id].restart);
+	} while (pdata[19] < max_nonce && !work_restart[thr_id].restart);
 
 	return 0;
 }
